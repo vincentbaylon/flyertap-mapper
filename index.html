@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flyertap Mapper</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <!-- Leaflet Draw CSS -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
+    <!-- Leaflet Draw JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+    <style>
+      #map {
+        height: 400px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Flyertap Mapper</h1>
+    <div id="map"></div>
+
+    <script>
+      // Initialize Leaflet map
+      var map = L.map('map').setView([51.505, -0.09], 13);
+
+      // Add Google Maps as a tile layer
+      L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+      }).addTo(map);
+
+      // Initialize Leaflet.draw
+      var drawnItems = new L.FeatureGroup();
+      map.addLayer(drawnItems);
+      var drawControl = new L.Control.Draw({
+        draw: {
+          polygon: {
+            shapeOptions: {
+              color: 'purple',
+            },
+          },
+          rectangle: false,
+          circle: false,
+          marker: false,
+          polyline: false,
+        },
+        edit: {
+          featureGroup: drawnItems,
+          remove: true,
+        },
+      });
+      map.addControl(drawControl);
+
+      // Event handler for drawing polygon
+      map.on(L.Draw.Event.CREATED, function (event) {
+        var layer = event.layer;
+        drawnItems.clearLayers().addLayer(layer);
+
+        // Get coordinates of the drawn polygon
+        var latLngs = layer.getLatLngs();
+
+        // Call function to retrieve addresses within the polygon
+        retrieveAddresses(latLngs);
+      });
+
+      // Function to retrieve addresses within the polygon
+      function retrieveAddresses(latLngs) {
+        // Calculate bounding box of the drawn polygon
+        var bounds = latLngs.reduce(function (bounds, latLng) {
+          return bounds.extend(latLng);
+        }, new L.LatLngBounds());
+
+        // Use Google Places API to search for places (addresses) within the polygon
+        var sw = bounds.getSouthWest();
+        var ne = bounds.getNorthEast();
+
+        // Proxy URL (using api.allorigins.win)
+        var proxyUrl = 'https://api.allorigins.win/get?url=';
+
+        // Construct the URL for the Place Nearby Search request using the proxy URL
+        var url =
+          proxyUrl +
+          encodeURIComponent(
+            'https://maps.googleapis.com/maps/api/place/nearbysearch/json' +
+              '?location=' +
+              bounds.getCenter().lat +
+              ',' +
+              bounds.getCenter().lng +
+              '&radius=' +
+              Math.max(
+                bounds.getNorthEast().distanceTo(bounds.getSouthWest()) / 2,
+                100
+              ) + // Use half of the diagonal distance as radius
+              '&types=address' +
+              '&key=API_KEY'
+          );
+
+        // Fetch request
+        fetch(url)
+          .then((response) => response.json())
+          .then((data) => {
+            console.log(data); // Log the response for debugging
+            var responseData = JSON.parse(data.contents);
+            if (responseData.status === 'OK') {
+              var addresses = responseData.results.map((result) => result.name);
+              alert('Addresses within the shape:\n' + addresses.length);
+            } else {
+              alert(
+                'Places API search was not successful for the following reason: ' +
+                  responseData.status
+              );
+            }
+          })
+          .catch((error) => {
+            alert('Error occurred while fetching data: ' + error.message);
+          });
+      }
+    </script>
+
+    <!-- Google Maps API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=API_KEY&libraries=places"></script>
+  </body>
+</html>
